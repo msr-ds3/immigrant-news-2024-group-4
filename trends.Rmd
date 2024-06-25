@@ -1,0 +1,325 @@
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(gt)
+library(broom)
+
+```
+
+```{r}
+# Function to assign president based on date
+assign_president <- function(date) {
+  if (date < as.Date("2009-01-20")) {
+    return("Bush")
+  } else if (date < as.Date("2017-01-20")) {
+    return("Obama")
+  } else {
+    return("Trump")
+  }
+}
+
+# Read and process the new crime CSV
+immigrants_crime <- read_csv("google_trends_crime.csv") %>%
+  mutate(
+    hits = as.numeric(search),
+    date = as.Date(paste0(year, "-", month, "-01")),
+    terms = "Crime"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president))
+
+# Read and process the new welfare CSV
+immigrants_welfare <- read_csv("google_trends_welfare.csv") %>%
+  mutate(
+    hits = as.numeric(search),
+    date = as.Date(paste0(year, "-", month, "-01")),
+    terms = "Welfare"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president))
+
+# Read and process the new reporting CSV
+report_immigrants <- read_csv("google_trends_report.csv") %>%
+  mutate(
+    hits = as.numeric(search),
+    date = as.Date(paste0(year, "-", month, "-01")),
+    terms = "Report"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president))
+
+ ggplot(immigrants_crime, aes(x = date, y = hits, color = president)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Immigrants and Crime",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal()
+
+  ggplot(immigrants_welfare, aes(x = date, y = hits, color = president)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Immigrants and Trend",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal()
+  
+  
+   ggplot(report_immigrants, aes(x = date, y = hits, color = president)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Report Immigrants",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Combine data
+combined_data <- bind_rows(immigrants_crime, immigrants_welfare, report_immigrants)
+
+# Set Obama as the baseline
+combined_data$president <- relevel(factor(combined_data$president), ref = "Obama")
+
+# Define the linear model function
+run_regression <- function(data) {
+  lm(hits ~ date + president, data = data)
+}
+
+# Run regression for each category
+crime_model <- run_regression(filter(combined_data, terms == "Crime"))
+welfare_model <- run_regression(filter(combined_data, terms == "Welfare"))
+report_model <- run_regression(filter(combined_data, terms == "Report"))
+
+# Extract results
+extract_results <- function(model, category) {
+  tidy(model) %>%
+    filter(term %in% c("(Intercept)", "date", "presidentBush", "presidentTrump")) %>%
+    mutate(term = ifelse(term == "(Intercept)", "Constant", term)) %>%
+    select(term, estimate, std.error) %>%
+    mutate(category = category)
+}
+
+crime_results <- extract_results(crime_model, "Crime")
+welfare_results <- extract_results(welfare_model, "Welfare")
+report_results <- extract_results(report_model, "Report")
+
+# Combine all results
+all_results <- bind_rows(crime_results, welfare_results, report_results)
+
+# Format the table as required
+formatted_results <- all_results %>%
+  pivot_wider(names_from = category, values_from = c(estimate, std.error)) %>%
+  arrange(term)
+
+# Print the results
+print(formatted_results)
+```
+
+```{r}
+
+library(gt)
+
+# Create the formatted table using gt
+formatted_results %>%
+  gt() %>%
+  tab_header(
+    title = "Immigration searches by presidential administration"
+  ) %>%
+  cols_label(
+    term = "Dependent variable",
+    estimate_Crime = "Crime (Estimate)",
+    std.error_Crime = "Crime (Std. Error)",
+    estimate_Welfare = "Welfare (Estimate)",
+    std.error_Welfare = "Welfare (Std. Error)",
+    estimate_Report = "Report (Estimate)",
+    std.error_Report = "Report (Std. Error)"
+  ) %>%
+  fmt_number(
+    columns = vars(estimate_Crime, std.error_Crime, estimate_Welfare, std.error_Welfare, estimate_Report, std.error_Report),
+    decimals = 3
+  )
+
+```
+
+
+```{r}
+
+# Set Obama as the baseline
+combined_data$president <- relevel(factor(combined_data$president), ref = "Obama")
+
+# Define the linear model function
+run_regression <- function(data) {
+  lm(hits ~ date + president, data = data)
+}
+
+# Run regression for each category
+crime_model <- run_regression(filter(combined_data, terms == "Crime"))
+welfare_model <- run_regression(filter(combined_data, terms == "Welfare"))
+report_model <- run_regression(filter(combined_data, terms == "Report"))
+
+# Add fitted values to the dataset
+combined_data <- combined_data %>%
+  mutate(
+    fitted_hits = case_when(
+      terms == "Crime" ~ predict(crime_model, newdata = .),
+      terms == "Welfare" ~ predict(welfare_model, newdata = .),
+      terms == "Report" ~ predict(report_model, newdata = .)
+    )
+  )
+
+# Plot the actual and fitted values
+ggplot(combined_data, aes(x = date, y = hits, color = president)) +
+  geom_point(alpha = 0.3) +
+  geom_line(aes(y = fitted_hits), size = 1) +
+  facet_wrap(~ terms, scales = "free_y") +
+  labs(title = "Immigration-related Searches Over Time",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  scale_y_continuous(n.breaks = 10)
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(data.table)
+ 
+# Load the data
+load("TopicModel.RData")
+ 
+document_topics <- make.dt(immigrFit, meta = out$meta)
+ 
+topic_terms <- t(exp(immigrFit$beta$logbeta[[1]]))
+ 
+rownames(topic_terms) <- out$vocab
+ 
+colnames(topic_terms) <- sprintf("Topic%d", 1:ncol(topic_terms))
+ 
+# Convert date to Date type
+document_topics$date <- as.Date(document_topics$date)
+ 
+# Define periods and set the order
+document_topics <- document_topics %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+ 
+# Aggregate the data by channel and month
+aggregated_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  group_by(month, channel, period) %>%
+  summarize(duration = sum(duration, na.rm = TRUE)) %>%
+  ungroup()
+ 
+# Convert month back to Date type for plotting
+aggregated_data$month <- as.Date(paste0(aggregated_data$month, "-01"))
+ 
+# Plot the results
+ggplot(aggregated_data, aes(x = month, y = duration, color = channel)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Immigration News Segments Over Time", 
+       y = "Monthly Duration of Immigration Segments", x = "Date", color = "Channel") +
+  theme_minimal()
+ 
+```
+
+
+```{r}
+
+
+# Define crime and welfare topics
+crime_topics <- c("Topic1", "Topic3")
+welfare_topic <- "Topic13"
+
+# Define periods
+document_topics <- document_topics %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+# Aggregate the data by channel, month, and topic
+crime_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  group_by(month, channel, period) %>%
+  summarize(crime_segments = sum(across(all_of(crime_topics)), na.rm = TRUE)) %>%
+  ungroup()
+
+welfare_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  group_by(month, channel, period) %>%
+  summarize(welfare_segments = sum(across(all_of(welfare_topic)), na.rm = TRUE)) %>%
+  ungroup()
+
+# Convert month back to Date type for plotting
+crime_data$month <- as.Date(paste0(crime_data$month, "-01"))
+welfare_data$month <- as.Date(paste0(welfare_data$month, "-01"))
+
+# Plot crime data
+crime_plot <- ggplot(crime_data, aes(x = month, y = crime_segments, color = channel)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Immigration News Segments Over Time (Crime)", 
+       y = "Total Monthly Crime Segments", x = "Date", color = "Channel") +
+  theme_minimal()
+
+# Plot welfare data
+welfare_plot <- ggplot(welfare_data, aes(x = month, y = welfare_segments, color = channel)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Immigration News Segments Over Time (Welfare)", 
+       y = "Total Monthly Welfare Segments", x = "Date", color = "Channel") +
+  theme_minimal()
+
+# Print plots
+print(crime_plot)
+print(welfare_plot)
+
+```
+```{r}
+# Create the formatted table using gt
+formatted_results %>%
+  gt() %>%
+  tab_header(
+    title = "Immigration Searches by Presidential Administration"
+  ) %>%
+  cols_label(
+    term = "Dependent variable",
+    estimate_Crime = "Crime (Estimate)",
+    std.error_Crime = "Crime (Std. Error)",
+    estimate_Welfare = "Welfare (Estimate)",
+    std.error_Welfare = "Welfare (Std. Error)",
+    estimate_Report = "Report (Estimate)",
+    std.error_Report = "Report (Std. Error)"
+  ) %>%
+  fmt_number(
+    columns = vars(estimate_Crime, std.error_Crime, estimate_Welfare, std.error_Welfare, estimate_Report, std.error_Report),
+    decimals = 3
+  )
+
+```
+
+```{r}
+
+```
+
