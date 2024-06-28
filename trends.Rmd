@@ -1,0 +1,751 @@
+---
+title: "Replication Study of Anti-Immigrant Rhetoric and ICE Reporting Interest: Evidence from a Large-Scale Study of Web Search Data"
+output: html_document
+date: "2024-06-28"
+---
+
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(gt)
+library(broom)
+
+```
+
+```{r}
+# Function to assign president based on date
+assign_president <- function(date) {
+  if (date < as.Date("2009-01-20")) {
+    return("Bush")
+  } else if (date < as.Date("2017-01-20")) {
+    return("Obama")
+  } else {
+    return("Trump")
+  }
+}
+
+immigrants_crime <- read_csv("google_trends_crime.csv") %>%
+  mutate(
+    hits = as.numeric(search),
+    date = as.Date(paste0(year, "-", month, "-01")),
+    terms = "Crime"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president))%>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+
+immigrants_welfare <- read_csv("google_trends_welfare.csv") %>%
+  mutate(
+    hits = as.numeric(search),
+    date = as.Date(paste0(year, "-", month, "-01")),
+    terms = "Welfare"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president))%>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+
+report_immigrants <- read_csv("google_trends_report.csv") %>%
+  mutate(
+    hits = as.numeric(search),
+    date = as.Date(paste0(year, "-", month, "-01")),
+    terms = "Report"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president))%>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+ ggplot(immigrants_crime, aes(x = date, y = hits, color = president)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Immigrants and Crime",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal()
+
+  ggplot(immigrants_welfare, aes(x = date, y = hits, color = president)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Immigrants and Trend",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal()
+  
+  
+   ggplot(report_immigrants, aes(x = date, y = hits, color = president)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Report Immigrants",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal()
+
+```
+```
+The graphs produced are similar to the ones displayed in paper. 
+
+```
+
+
+```{r}
+# Combine
+combined_data <- bind_rows(immigrants_crime, immigrants_welfare, report_immigrants)
+
+# Set Obama as the baseline
+combined_data$president <- relevel(factor(combined_data$president), ref = "Obama")
+
+# Define the linear model function
+run_regression <- function(data) {
+  lm(hits ~ date + president, data = data)
+}
+
+
+# Run regression
+crime_model <- run_regression(filter(combined_data, terms == "Crime"))
+welfare_model <- run_regression(filter(combined_data, terms == "Welfare"))
+report_model <- run_regression(filter(combined_data, terms == "Report"))
+
+# Extract results
+extract_results <- function(model, category) {
+  tidy(model) %>%
+    filter(term %in% c("(Intercept)", "date", "presidentBush", "presidentTrump")) %>%
+    mutate(term = ifelse(term == "(Intercept)", "Constant", term)) %>%
+    select(term, estimate, std.error) %>%
+    mutate(category = category)
+}
+
+crime_results <- extract_results(crime_model, "Crime")
+welfare_results <- extract_results(welfare_model, "Welfare")
+report_results <- extract_results(report_model, "Report")
+
+# Combine all results
+all_results <- bind_rows(crime_results, welfare_results, report_results)
+
+# Format the table as required
+formatted_results <- all_results %>%
+  pivot_wider(names_from = category, values_from = c(estimate, std.error)) %>%
+  arrange(term)
+
+# Print the results
+print(formatted_results)
+```
+```
+The table produced have the same standard error, but the estimate have a slight difference, which might be a result of different data cleaning practices (removing "0" and "NA" values)
+
+```
+
+```{r}
+
+library(gt)
+
+# Create the formatted table using gt
+formatted_results %>%
+  gt() %>%
+  tab_header(
+    title = "Immigration searches by presidential administration"
+  ) %>%
+  cols_label(
+    term = "Dependent variable",
+    estimate_Crime = "Crime (Estimate)",
+    std.error_Crime = "Crime (Std. Error)",
+    estimate_Welfare = "Welfare (Estimate)",
+    std.error_Welfare = "Welfare (Std. Error)",
+    estimate_Report = "Report (Estimate)",
+    std.error_Report = "Report (Std. Error)"
+  ) %>%
+  fmt_number(
+    columns = c(estimate_Crime, std.error_Crime, estimate_Welfare, std.error_Welfare, estimate_Report, std.error_Report),
+    decimals = 3
+  )
+
+```
+
+
+```{r}
+
+combined_data$president <- relevel(factor(combined_data$president), ref = "Obama")
+
+# Define the linear model function
+run_regression <- function(data) {
+  lm(hits ~ date + president, data = data)
+}
+
+# Run regression for each category
+crime_model <- run_regression(filter(combined_data, terms == "Crime"))
+welfare_model <- run_regression(filter(combined_data, terms == "Welfare"))
+report_model <- run_regression(filter(combined_data, terms == "Report"))
+
+
+combined_data <- combined_data %>%
+  mutate(
+    fitted_hits = case_when(
+      terms == "Crime" ~ predict(crime_model, newdata = .),
+      terms == "Welfare" ~ predict(welfare_model, newdata = .),
+      terms == "Report" ~ predict(report_model, newdata = .)
+    )
+  )
+
+
+ggplot(combined_data, aes(x = date, y = hits, color = president)) +
+  geom_point(alpha = 0.3) +
+  geom_line(aes(y = fitted_hits), size = 1) +
+  facet_wrap(~ terms, scales = "free_y") +
+  labs(title = "Immigration-related Searches Over Time",
+       x = "Date",
+       y = "Search Interest (Google Trends)") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  scale_y_continuous(n.breaks = 10)
+```
+```
+The graph Prediction of term "Immigrants + Crime" over the years looks different compared to the one in paper since it predicts number of searches under Bush's and Trump's presidential terms as slightly upward trend while the paper shows number of searches shows downward trend in Bush and Trump's term. 
+
+The graph Prediction of term "Immigrants + Welfare" over the years shows no significant upward or downward trends while the one in paper shows a negative trend during Bush term and positive trend during Trump term. 
+
+The graph Prediction of term "Immigrants + Reporting" over the years shows a slightly downward trend during Bush term while the one in the paper shows upward trend. 
+```
+
+```{r}
+library(data.table)
+library(stm)
+load("TopicModel.RData")
+ 
+document_topics <- make.dt(immigrFit, meta = out$meta)
+ 
+topic_terms <- t(exp(immigrFit$beta$logbeta[[1]]))
+ 
+rownames(topic_terms) <- out$vocab
+ 
+colnames(topic_terms) <- sprintf("Topic%d", 1:ncol(topic_terms))
+ 
+# Convert date to Date type
+document_topics$date <- as.Date(document_topics$date)
+ 
+# Define periods and set the order
+document_topics <- document_topics %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+ 
+# Aggregate the data by channel and month
+aggregated_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  group_by(month, channel, period) %>%
+  summarize(duration = sum(duration, na.rm = TRUE)) %>%
+  ungroup()
+ 
+# Convert month back to Date type for plotting
+aggregated_data$month <- as.Date(paste0(aggregated_data$month, "-01"))
+ 
+# Plot the results
+ggplot(aggregated_data, aes(x = month, y = duration, color = channel)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Immigration News Segments Over Time", 
+       y = "Monthly Duration of Immigration Segments", x = "Date", color = "Channel") +
+  theme_minimal()
+ 
+```
+
+
+```{r}
+
+
+# Define crime and welfare topics
+crime_topics <- c("Topic1", "Topic3")
+welfare_topic <- "Topic13"
+
+# Define periods
+document_topics <- document_topics %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+# Aggregate the data by channel, month, and topic
+crime_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  group_by(month, channel, period) %>%
+  summarize(crime_segments = sum(across(all_of(crime_topics)), na.rm = TRUE)) %>%
+  ungroup()
+
+welfare_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  group_by(month, channel, period) %>%
+  summarize(welfare_segments = sum(across(all_of(welfare_topic)), na.rm = TRUE)) %>%
+  ungroup()
+
+# Convert month back to Date type for plotting
+crime_data$month <- as.Date(paste0(crime_data$month, "-01"))
+welfare_data$month <- as.Date(paste0(welfare_data$month, "-01"))
+
+# Plot crime data
+crime_plot <- ggplot(crime_data, aes(x = month, y = crime_segments, color = channel)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Immigration News Segments Over Time (Crime)", 
+       y = "Total Monthly Crime Segments", x = "Date", color = "Channel") +
+  theme_minimal()
+
+# Plot welfare data
+welfare_plot <- ggplot(welfare_data, aes(x = month, y = welfare_segments, color = channel)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Immigration News Segments Over Time (Welfare)", 
+       y = "Total Monthly Welfare Segments", x = "Date", color = "Channel") +
+  theme_minimal()
+
+# Print plots
+print(crime_plot)
+print(welfare_plot)
+
+```
+
+
+This is the monthly version. The 3 plots look similar to Figure 2 and 3 used in the paper 
+```{r}
+
+# Read and process the monthly data
+report_immigrants <- read_csv("google_trends_report.csv") %>%
+  mutate(
+    date = as.Date(paste0(year, "-", month, "-01")),
+    month = format(date, "%Y-%m"),
+    hits = as.numeric(search),
+    president = sapply(date, assign_president)
+  )
+
+# Aggregate the document topics data by month
+aggregated_data <- document_topics %>%
+  mutate(month = factor(format(date, "%Y-%m"))) %>%
+  group_by(month) %>%
+  summarize(
+    duration = sum(duration, na.rm = TRUE),
+    crime_coverage = sum(Topic1 + Topic3, na.rm = TRUE),
+    welfare_coverage = sum(Topic13, na.rm = TRUE)
+  )
+
+# Merge aggregated data with report_immigrants data
+merged_data <- report_immigrants %>%
+  inner_join(aggregated_data, by = "month")
+
+# Add dummy variables for Trump administration and Date
+merged_data <- merged_data %>%
+  mutate(trump_admin = ifelse(president == "Trump", 1, 0),
+         date_numeric = as.numeric(date))
+
+# Run regression on monthly data
+monthly_model <- lm(hits ~ duration + crime_coverage + welfare_coverage + trump_admin + date_numeric, data = merged_data)
+
+# Extract results
+monthly_results <- tidy(monthly_model) %>%
+  filter(term %in% c("(Intercept)", "duration", "crime_coverage", "welfare_coverage", "trump_admin", "date_numeric")) %>%
+  mutate(term = case_when(
+    term == "(Intercept)" ~ "Constant",
+    term == "duration" ~ "Immigration segs",
+    term == "crime_coverage" ~ "Immigr + Crime coverage",
+    term == "welfare_coverage" ~ "Immigr + Welfare coverage",
+    term == "trump_admin" ~ "Trump admin",
+    term == "date_numeric" ~ "Date",
+    TRUE ~ term
+  ))
+
+# Format the table using gt
+monthly_results %>%
+  gt() %>%
+  tab_header(
+    title = "Media Coverage and Reporting Searches (Google) - Monthly Data"
+  ) %>%
+  cols_label(
+    term = "Dependent variable",
+    estimate = "Estimate",
+    std.error = "Std. Error",
+    statistic = "t value",
+    p.value = "p value"
+  ) %>%
+  fmt_number(
+    columns = c(estimate, std.error, statistic, p.value),
+    decimals=3)
+
+summary(monthly_model)
+```
+
+This is generated by the daily data
+```{r}
+
+daily_data <- read_csv("gt_report_daily.csv")
+
+# Convert the date column to Date type
+daily_data <- daily_data %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+
+# Add period information based on the date
+daily_data <- daily_data %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  ))
+
+# Ensure the period column is in the aggregated data
+aggregated_data_daily <- aggregated_data %>%
+  ungroup() %>%
+  mutate(date = as.Date(paste0(month, "-01")),
+         period = case_when(
+           date < as.Date("2015-06-01") ~ "Pre-Campaign",
+           date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+           date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+         )) %>%
+  select(date, duration, crime_coverage, welfare_coverage, period)
+
+# Merge daily data with aggregated data
+merged_daily_data <- daily_data %>%
+  left_join(aggregated_data_daily, by = c("date", "period"))
+
+# Add dummy variables for Trump administration and Date
+merged_daily_data <- merged_daily_data %>%
+  mutate(trump_admin = ifelse(date >= as.Date("2017-01-20"), 1, 0),
+         date_numeric = as.numeric(date))
+
+# Run regression on daily data
+daily_model <- lm(search ~ duration + crime_coverage + welfare_coverage + trump_admin + date_numeric, data = merged_daily_data)
+
+# Extract results
+daily_results <- tidy(daily_model) %>%
+  filter(term %in% c("duration", "crime_coverage", "welfare_coverage", "trump_admin", "date_numeric")) %>%
+  mutate(term = case_when(
+    term == "duration" ~ "Immigration segs",
+    term == "crime_coverage" ~ "Immigr + Crime coverage",
+    term == "welfare_coverage" ~ "Immigr + Welfare coverage",
+    term == "trump_admin" ~ "Trump admin",
+    term == "date_numeric" ~ "Date",
+    TRUE ~ term
+  ))
+
+# Add the constant term
+constant_term <- tidy(daily_model) %>%
+  filter(term == "(Intercept)") %>%
+  mutate(term = "Constant")
+
+# Combine results with the constant term
+daily_results <- bind_rows(daily_results, constant_term)
+
+# Format the table using gt
+daily_results %>%
+  gt() %>%
+  tab_header(
+    title = "Media Coverage and Reporting Searches (Google) - Daily Data"
+  ) %>%
+  cols_label(
+    term = "Dependent variable",
+    estimate = "Estimate",
+    std.error = "Std. Error",
+    statistic = "t value",
+    p.value = "p value"
+  ) %>%
+  fmt_number(
+    columns = c(estimate, std.error, statistic, p.value),
+    decimals = 3
+  )
+```
+
+
+--------------------------------------------------------
+
+#Extension
+
+### Introduction
+ 
+In this analysis, we aimed to examine how specific immigration-related topics, particularly those showing significant fluctuations, are influenced by political events and policies. By setting thresholds to identify topics with significant wave patterns, we highlighted topics 17, 19, 20, and 27 as particularly noteworthy. Subsequently, we conducted a regression analysis to determine their statistical significance.
+
+### Approach
+
+We aggregated the document topics data by month and merged it with the report immigrants data to facilitate our regression analysis. The data included various immigration-related topics and their coverage duration.
+
+```{r}
+# Aggregate the data by channel, month, and topic
+aggregated_data <- document_topics %>%
+  mutate(month = format(date, "%Y-%m")) %>%
+  pivot_longer(cols = starts_with("Topic"), names_to = "topic", values_to = "value") %>%
+  group_by(month, topic, period) %>%
+  summarize(total_value = sum(value, na.rm = TRUE)) %>%
+  ungroup()
+
+# Convert month back to Date type for plotting
+aggregated_data$month <- as.Date(paste0(aggregated_data$month, "-01"))
+
+```
+We set some thresholds to identify topics with significant wave pattern, and then plot them out
+
+```{r}
+# Calculate the range for each topic
+topic_ranges <- aggregated_data %>%
+  group_by(topic) %>%
+  summarize(range = max(total_value) - min(total_value))
+
+# Define a threshold for significant fluctuations
+threshold <- 150  # This can be adjusted based on your requirements
+
+# Filter topics with significant fluctuations
+significant_topics <- topic_ranges %>%
+  filter(range > threshold & range <500) %>%
+  pull(topic)
+
+# Filter the aggregated data to include only significant topics
+significant_data <- aggregated_data %>%
+  filter(topic %in% significant_topics)
+
+```
+
+
+In this part, we identify new topic trends during the campaign and Post-Inauguration part, which will be the focus of our research analysis.    
+
+```{r}
+# Plot the results for significant topics
+# Filter for Campaign and Post-Inauguration periods only
+filtered_data <- significant_data %>%
+  filter(period %in% c("Campaign", "Post-Inauguration"))
+
+# Plot the data with specific date breaks and labels
+ggplot(filtered_data, aes(x = month, y = total_value, color = topic)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Significant Topics Trends Over Time", 
+       y = "Total Monthly Value", x = "Date", color = "Topic") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 months", date_labels = "%b %Y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```
+Out of all emerging topics, we decide to explore topic 17, 19, 20, 27. We decide to exclude topics that were discussed in the main paper and topics that are simply common terms used in election process.  
+
+Our hypothesis is that beside immigrant crime and welfare, there are other important factors that can influence the reporting searches. 
+```
+
+
+### Regression Analysis
+The regression analysis aimed to determine the impact of various factors, including the identified topics, on the number of hits related to reporting searches.
+
+```{r}
+# Aggregate the document topics data by month
+aggregated_data <- document_topics %>%
+  mutate(month = factor(format(date, "%Y-%m"))) %>%
+  group_by(month) %>%
+  summarize(
+    duration = sum(duration, na.rm = TRUE),
+    crime_coverage = sum(Topic1 + Topic3, na.rm = TRUE),
+    welfare_coverage = sum(Topic13, na.rm = TRUE),
+    Topic_17 = sum(Topic17, na.rm = TRUE),
+    Topic_19 = sum(Topic19, na.rm = TRUE),
+    Topic_20 = sum(Topic20, na.rm = TRUE),
+    Topic_27 = sum(Topic27, na.rm = TRUE)
+  )
+
+# Merge aggregated data with report_immigrants data
+merged_data <- report_immigrants %>%
+  inner_join(aggregated_data, by = "month")
+
+# Add dummy variables for Trump administration and Date
+merged_data <- merged_data %>%
+  mutate(trump_admin = ifelse(president == "Trump", 1, 0),
+         date_numeric = as.numeric(date))
+
+# Run regression on monthly data
+monthly_model <- lm(hits ~ duration + Topic_17 + Topic_19 + Topic_20 + Topic_27 + crime_coverage + welfare_coverage + trump_admin + date_numeric, data = merged_data)
+
+# Extract results
+monthly_results <- tidy(monthly_model) %>%
+  filter(term %in% c("(Intercept)", "duration", "crime_coverage", "welfare_coverage", "Topic_17", "Topic_19", "Topic_20", "Topic_27", "trump_admin", "date_numeric")) %>%
+  mutate(term = case_when(
+    term == "(Intercept)" ~ "Constant",
+    term == "duration" ~ "Immigration segs",
+    term == "crime_coverage" ~ "Immigr + Crime coverage",
+    term == "welfare_coverage" ~ "Immigr + Welfare coverage",
+    term == "Topic_17" ~ "Topic_17",
+    term == "Topic_19" ~ "Topic_19",
+    term == "Topic_20" ~ "Topic_20",
+    term == "Topic_27" ~ "Topic_27",
+    term == "trump_admin" ~ "Trump admin",
+    term == "date_numeric" ~ "Date",
+    TRUE ~ term
+  ))
+
+# Format the table using gt
+monthly_results %>%
+  gt() %>%
+  tab_header(
+    title = "Media Coverage and Reporting Searches (Google) - Monthly Data"
+  ) %>%
+  cols_label(
+    term = "Dependent variable",
+    estimate = "Estimate",
+    std.error = "Std. Error",
+    statistic = "t value",
+    p.value = "p value"
+  ) %>%
+  fmt_number(
+    columns = c(estimate, std.error, statistic, p.value),
+    decimals = 3
+  )
+
+summary(monthly_model)
+
+```
+The regression analysis revealed that topics 20 and 27 had significant coefficients, suggesting a notable influence on the dependent variable. 
+
+
+### Key Findings
+
+Topic 20: Family Separation and Zero Tolerance Policy
+Highest Prob: family, children, separation, parent, kid, child, one
+FREX: reunite, parent, children, separation, kid, mother, zero
+Score: children, family, separation, parent, kid, child, mother
+The significant keywords in Topic 20 strongly correlate with the "Trump zero tolerance policy + separation." Our regression analysis confirmed the substantial impact of this topic during the Trump administration.
+
+The significant keywords in Topic 20 strongly correlate with the "Trump zero tolerance p
+""olicy + separation." Our regression analysis confirmed the substantial impact of this topic during the Trump administration.
+
+Topic 27: ICE Deportation
+Highest Prob: ice, deport, enforce, criminal, undocumented, agent, arrest
+FREX: custom, raid, ice, abolish, remove, operation, agency
+Score: ice, raid, custom, agent, deport, arrest, enforce
+Topic 27, characterized by keywords related to ICE and deportation, aligns with "ICE deportation" search trends, indicating heightened media coverage and public interest during relevant political events.
+
+Topic 27, characterized by keywords related to ICE and deportation, aligns with "ICE deportation" search trends, indicating heightened media coverage and public interest during relevant political events.
+
+
+```{r}
+
+# Filter for Campaign and Post-Inauguration periods only, and include only Topic 20 and Topic 27
+filtered_data <- significant_data %>%
+  filter(period %in% c("Campaign", "Post-Inauguration") & topic %in% c("Topic20", "Topic27"))
+
+# Plot the data with specific date breaks and labels
+ggplot(filtered_data, aes(x = month, y = total_value, color = topic)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ period, scales = "free_x") +
+  labs(title = "Significant Topics Trends Over Time (Topic 20 and Topic 27)", 
+       y = "Total Monthly Value", x = "Date", color = "Topic") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```
+We realize there are more upticks in topic 20 and topic 27 during Post-Inauguration period. 
+
+```
+
+### Supplementary Analysis
+Zero Tolerance Policy
+
+```{r}
+# Read the data without any transformations
+zero_tolerance_raw <- read_csv("zero_tolerance_policy.csv", skip = 2, col_names = c("Week", "trump_zero_tolerance_separ"))
+print(head(zero_tolerance_raw))
+
+# Load and preprocess the data
+zero_tolerance_policy <- zero_tolerance_raw %>%
+  mutate(
+    date = ymd(Week),  # Use lubridate's ymd to parse the date
+    hits = as.numeric(trump_zero_tolerance_separ),
+    terms = "zero_tolerance_policy"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president)) %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+# Plot the trends over the date
+ggplot(zero_tolerance_policy, aes(x = date, y = hits, group = period)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Zero Tolerance Policy Search Trends Over Time", 
+       x = "Date", y = "Search Hits (Google Trends)", color = "Period") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 months", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+From the set of key words included in the topic 20, we can identify that the search trend for Trump's "zero tolerance policy" also correlates with the trend of reporting searches.  
+
+```{r}
+# Read the data without any transformations
+ice_deportation_raw <- read_csv("ICEdeportation.csv", skip = 2, col_names = c("Week", "ICE_deportation"))
+print(head(ice_deportation_raw))
+
+# Load and preprocess the data
+ice_deportation_policy <- ice_deportation_raw %>%
+  mutate(
+    date = ymd(Week),  # Use lubridate's ymd to parse the date
+    hits = as.numeric(ICE_deportation),
+    terms = "ICE_deportation"
+  ) %>%
+  filter(!is.na(date) & hits > 0) %>%
+  mutate(president = sapply(date, assign_president)) %>%
+  mutate(period = case_when(
+    date < as.Date("2015-06-01") ~ "Pre-Campaign",
+    date >= as.Date("2015-06-01") & date < as.Date("2017-01-01") ~ "Campaign",
+    date >= as.Date("2017-01-01") ~ "Post-Inauguration"
+  )) %>%
+  mutate(period = factor(period, levels = c("Pre-Campaign", "Campaign", "Post-Inauguration")))
+
+# Plot the trends over the date
+ggplot(ice_deportation_policy, aes(x = date, y = hits, group = period)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "ICE Deportation Search Trends Over Time", 
+       x = "Date", y = "Search Hits (Google Trends)", color = "Period") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+From the set of key words included in the topic 27, we can identify that the search trend for ICE deportation event also correlates with the reporting searches trend. 
+
+### Conclution
+
+By plotting the trends over time, we were able to prove our hypothesis that there are other important factors that can influence the reporting searches. 
+
+We observed overlapping trends between political events and reporting searches during Post-inauguration. These findings were suppprted by analyzing Google trend data of topic 20 and 27's keywords. 
+
+Future research could explore additional topics or different time periods to further understand the dynamics of political influence on media coverage.
+
+
