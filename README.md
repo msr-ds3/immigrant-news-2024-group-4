@@ -10,11 +10,11 @@ In our extension research, our aim was to investigate the relationship between p
 
 1.  Setup Instructions:
 Install necessary R libraries.
-Ensure all required data sources are loaded
+#Ensure all required data sources are loaded
 
 2.  View Results:
 Run the file **`trends.Rmd`** to see detailed results of the replication study and extension research.
-Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code
+#Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code
 
 **Data Sources:**
 - **`crime.csv`**: Original Google search data for "immigrant + crime" searches used in the paper.
