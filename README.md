@@ -17,7 +17,7 @@ Run the file trends.Rmd to see detailed results of the replication study and ext
 Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code
 
 **Data Sources:**
-**`crime.csv`**: Original Google search data for "immigrant + crime" searches used in the paper.
+- **`crime.csv`**: Original Google search data for "immigrant + crime" searches used in the paper.
 - **`report.csv`**: Original Google search data for "immigrant + report" searches used in the paper.
 - **`welfare.csv`**: Original Google search data for "immigrant + welfare" searches used in the paper.
 - **`TopicModel.RData`**: Topic model used in the original paper.
