@@ -6,15 +6,15 @@ This project aims to replicate and expand upon the findings of the study titled 
 **Extension Research:** 
 In our extension research, our aim was to investigate the relationship between political events and policies on the significant search trends related to immigration topics. We applied thresholds to identify topics displaying notable wave patterns and conducted regression analyses to assess the statistical significance of selected topics.
 
-**Replication Study and Extension Research Results:**
+#**Replication Study and Extension Research Results:**
 
 1.  Setup Instructions:
 Install necessary R libraries.
-#Ensure all required data sources are loaded
+Ensure all required data sources are loaded.
 
 2.  View Results:
 Run the file **`trends.Rmd`** to see detailed results of the replication study and extension research.
-#Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code
+Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code.
 
 **Data Sources:**
 - **`crime.csv`**: Original Google search data for "immigrant + crime" searches used in the paper.
