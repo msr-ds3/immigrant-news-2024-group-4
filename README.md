@@ -12,9 +12,8 @@ In our extension research, our aim was to investigate the relationship between p
 Install necessary R libraries (tidyverse, ggplot2, dplyr, tidyr, lubraidate, gt, broom) and ensure all data sources are loaded.
 
 2.  View Results:
-Run the file **`trends.Rmd`** to see detailed results of the replication study and extension research.
 
-  Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code.
+Run the file **`trends.Rmd`** to see detailed results of the replication study and extension research. Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code.
 
 **Data Sources:**
 - **`crime.csv`**: Original Google search data for "immigrant + crime" searches used in the paper.
