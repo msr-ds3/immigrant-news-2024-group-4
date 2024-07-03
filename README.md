@@ -17,12 +17,12 @@ Run the file trends.Rmd to see detailed results of the replication study and ext
 Alternatively, view the results directly through [this link](https://htmlpreview.github.io/?https://github.com/msr-ds3/immigrant-news-2024-group-4/blob/main/trends.html) without running the code
 
 **Data Sources:**
-crime.csv contains the original google search data for "immigrant + crime" searches used in the paper
-report.csv contains the original google search data for "immigrant + report" searches used in the paper
-welfare.csv contains the original google search data for "immigrant + welfare" searches used in the paper
-TopicModel.RData contains the topic model used in the original paper
-zero_tolerance_policy.csv contains the google search data for zero tolerance policy data used in the extension research
-ICEdeportation.csv contains the google search data for ICE deportation data used in the extension research
+- 'crime.csv' contains the original google search data for "immigrant + crime" searches used in the paper
+- 'report.csv' contains the original google search data for "immigrant + report" searches used in the paper
+- 'welfare.csv' contains the original google search data for "immigrant + welfare" searches used in the paper
+- 'TopicModel.RData' contains the topic model used in the original paper
+- 'zero_tolerance_policy.csv' contains the google search data for zero tolerance policy data used in the extension research
+- 'ICEdeportation.csv' contains the google search data for ICE deportation data used in the extension research
 
 
 
